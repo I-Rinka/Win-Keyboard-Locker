@@ -113,10 +113,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetForegroundWindow(hwnd);//使得菜单出现后，单击菜单外的使地方选框消失
 			CreatTrayMenu(hwnd);
 		}
-		if (lParam == NIN_BALLOONUSERCLICK)
+		/*if (lParam == NIN_BALLOONUSERCLICK)
 		{
 			MessageBox(hwnd, WKBL_APP_NAME, WKBL_APP_TITLE, 0);
-		}
+		}*/
 		//if (isLocked && lParam == NIN_BALLOONUSERCLICK)//设定为只有需要解锁时点击通知才有用
 		//{
 		//	KeyboardLocker(hwnd);
