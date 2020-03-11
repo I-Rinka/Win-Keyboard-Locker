@@ -4,6 +4,7 @@
 #include <tchar.h>
 #include "Resource.h"
 #include "Name.h"
+#include"wintoastlib.h"
 //方便统一调用名称,前缀为WKBDL_
 
 //定义WinProc处理的信息，对托盘图标操作后会发送WM_TRAYICON的message
@@ -22,6 +23,8 @@ HHOOK KBHook;//钩子句柄
 
 //通过全局变量isLocked来判断当前键盘上锁状态
 bool isLocked = false;
+//判断当前操作系统是否支持Toast
+bool SystemIsCopatiple = false;
 
 //托盘图标
 NOTIFYICONDATA TrayIcon = {};
@@ -30,11 +33,38 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK KbdHkProc(int, WPARAM, LPARAM);
 
 void CreatTrayMenu(HWND);//显示菜单
-void KeyboardLocker(HWND);//核心程序，对钩子句柄操作，进行键盘的锁定/解锁
-void ExitWKBL(HWND);//退出程序
-void ShowMessage_Lock(HWND);
-void ShowMessage_Unlock(HWND);
+void KeyboardLocker();//核心程序，对钩子句柄操作，进行键盘的锁定/解锁
+void ShowMessage_Lock();
+void ShowMessage_Unlock();
 
+void APP_EXIT(HWND);//退出程序
+void APP_ERROR(int);
+
+using namespace WinToastLib;
+
+//在此实现对Toast选框的操作
+class WinToastHandler : public IWinToastHandler {
+public:
+	void toastActivated() const {
+		//click toast
+	}
+
+	void toastActivated(int actionIndex) const {
+		//click button
+		KeyboardLocker();
+	}
+
+	void toastDismissed(WinToastDismissalReason state) const {
+		//switch state
+	}
+
+	void toastFailed() const {
+		//error
+	}
+};
+
+WinToastTemplate InitializeWinToastTemlate();
+WinToastTemplate Toast32;
 
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
@@ -53,8 +83,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	if (!RegisterClass(&wcex))
 	{
-		MessageBox(NULL, WKBL_APP_FAIL, WKBL_APP_TITLE, NULL);
-		return 1;
+		APP_ERROR(3);
 	}
 
 	hInst = hInstance;
@@ -63,8 +92,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	HWND hwnd = CreateWindow(WKBL_APP_NAME, WKBL_APP_TITLE, WS_OVERLAPPEDWINDOW, 0, 0, 0, 0, 0, 0, hInstance, NULL);
 	if (!hwnd)
 	{
-		MessageBox(NULL, WKBL_APP_FAIL, WKBL_APP_TITLE, NULL);
-		return 2;
+		APP_ERROR(2);
 	}
 
 	//定义托盘图标
@@ -77,6 +105,17 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	StringCchCopy(TrayIcon.szInfoTitle, ARRAYSIZE(TrayIcon.szInfoTitle), WKBL_APP_TITLE);
 	StringCchCopy(TrayIcon.szInfo, ARRAYSIZE(TrayIcon.szInfo), WKBL_NOTIFY_START);
 	Shell_NotifyIcon(NIM_ADD, &TrayIcon);
+
+	//初始化Toast
+	if (WinToast::isCompatible())
+	{
+		SystemIsCopatiple = true;
+		WinToast::instance()->setAppName(WKBL_APP_NAME);
+		WinToast::instance()->setAppUserModelId(WKBL_APP_TITLE);
+		WinToast::instance()->initialize();
+		Toast32 = InitializeWinToastTemlate();
+	}
+
 
 	// Main message loop:
 	MSG msg;
@@ -98,11 +137,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (LOWORD(wParam) == MENU_ACTION_LOCK)
 			{
-				KeyboardLocker(hwnd);
+				KeyboardLocker();
 			}
 			if (LOWORD(wParam) == MENU_ACTION_EXIT)
 			{
-				ExitWKBL(hwnd);
+				APP_EXIT(hwnd);
 			}
 		}
 		break;
@@ -113,14 +152,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SetForegroundWindow(hwnd);//使得菜单出现后，单击菜单外的使地方选框消失
 			CreatTrayMenu(hwnd);
 		}
-		/*if (lParam == NIN_BALLOONUSERCLICK)
-		{
-			MessageBox(hwnd, WKBL_APP_NAME, WKBL_APP_TITLE, 0);
-		}*/
-		//if (isLocked && lParam == NIN_BALLOONUSERCLICK)//设定为只有需要解锁时点击通知才有用
-		//{
-		//	KeyboardLocker(hwnd);
-		//}在通知中心点击后仍然有响应，需要完善
 		break;
 
 	case WM_DESTROY:
@@ -168,39 +199,61 @@ void CreatTrayMenu(HWND hwnd)
 }
 
 //退出程序
-void ExitWKBL(HWND hwnd)
+void APP_EXIT(HWND hwnd)
 {
 	Shell_NotifyIcon(NIM_DELETE, &TrayIcon);
 	::DestroyWindow(hwnd);
 }
 
-//显示消息
-void ShowMessage_Unlock(HWND hwnd)
+void APP_ERROR(int ErrorNumber)
 {
-	TrayIcon.hWnd = hwnd;
+	MessageBox(NULL, WKBL_APP_ERROR, WKBL_APP_TITLE, NULL);
+	exit(ErrorNumber);
+}
+
+WinToastTemplate InitializeWinToastTemlate()
+{
+	WinToastTemplate temp(WinToastTemplate::Text03);
+	temp.setFirstLine(WKBL_APP_TITLE);
+	temp.setSecondLine(WKBL_NOTIFY_LOCK);
+	temp.setAttributionText(WKBL_NOTIFY_LOCK2);
+	temp.addAction(WKBL_MENU_UNLOCK);
+	temp.setDuration(WinToastTemplate::Duration::Short);
+	return temp;
+}
+
+//显示消息
+void ShowMessage_Unlock()
+{
 	StringCchCopy(TrayIcon.szInfo, ARRAYSIZE(TrayIcon.szInfo), WKBL_NOTIFY_UNLOCK);
 	Shell_NotifyIcon(NIM_MODIFY, &TrayIcon);
 }
-void ShowMessage_Lock(HWND hwnd)
+void ShowMessage_Lock()
 {
-	TrayIcon.hWnd = hwnd;
 	StringCchCopy(TrayIcon.szInfo, ARRAYSIZE(TrayIcon.szInfo), WKBL_NOTIFY_LOCK);
 	Shell_NotifyIcon(NIM_MODIFY, &TrayIcon);
 }
 
 //核心程序，控制解锁与否
-void KeyboardLocker(HWND hwnd)
+void KeyboardLocker()
 {
 	if (isLocked)
 	{
 		UnhookWindowsHookEx(KBHook);//解锁
-		ShowMessage_Unlock(hwnd);
+		ShowMessage_Unlock();
 		isLocked = false;
 	}
 	else
 	{
 		KBHook = SetWindowsHookEx(13, (HOOKPROC)KbdHkProc, (HINSTANCE)GetModuleHandle(NULL), 0);//锁定键盘
-		ShowMessage_Lock(hwnd);
+		if (SystemIsCopatiple)
+		{
+			WinToast::instance()->showToast(Toast32, new WinToastHandler());
+		}
+		else
+		{
+			ShowMessage_Lock();
+		}
 		isLocked = true;
 	}
 }
