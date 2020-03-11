@@ -35,34 +35,6 @@ void ExitWKBL(HWND);//退出程序
 void ShowMessage_Lock(HWND);
 void ShowMessage_Unlock(HWND);
 
-using namespace WinToastLib;
-
-//在此规定对Toast选框行为的操作
-class WinToastHandler : public IWinToastHandler {
-public:
-	void toastActivated() const {
-		//click toast
-		exit(0);
-	}
-
-	void toastActivated(int actionIndex) const {
-		//click button
-		int t = actionIndex;
-		exit(16 + actionIndex);
-	}
-
-	void toastDismissed(WinToastDismissalReason state) const {
-		//switch state
-	}
-
-	void toastFailed() const {
-		//error
-		exit(5);
-	}
-};
-
-WinToastTemplate InitialWinToastTemlate();
-WinToastTemplate Toast32;
 
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
