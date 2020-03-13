@@ -51,6 +51,8 @@ public:
 
 	void toastActivated(int actionIndex) const {
 		//click button
+		//为了防止键盘在解锁时用户点击“解锁”出现键盘锁定的情况，因此必须使得以“锁定状态”进入
+		isLocked = true;
 		KeyboardLocker();
 	}
 
@@ -151,6 +153,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			SetForegroundWindow(hwnd);//使得菜单出现后，单击菜单外的使地方选框消失
 			CreatTrayMenu(hwnd);
+		}
+		//双击图标时锁定/解锁键盘
+		else if (lParam == WM_LBUTTONDBLCLK)
+		{
+			KeyboardLocker();
 		}
 		break;
 
